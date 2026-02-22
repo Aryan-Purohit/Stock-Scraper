@@ -4,19 +4,20 @@
 const floatWidget = document.createElement('div');
 floatWidget.id = "my-stock-extension-widget";
 
+// DARK MODE: Updated container styles
 Object.assign(floatWidget.style, {
     position: 'fixed',
     bottom: '20px',
     right: '20px',
     width: '260px',
-    backgroundColor: '#ffffff',
-    border: '1px solid #e0e0e0',
+    backgroundColor: '#121212', // Deep dark background
+    border: '1px solid #333333', // Subtle dark border
     borderRadius: '12px',
-    boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.5)', // Stronger shadow for dark mode
     padding: '16px',
     zIndex: '999999',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    color: '#202124',
+    color: '#e8eaed', // Off-white main text
     transform: 'translateX(120%)',
     transition: 'transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
 });
@@ -25,12 +26,12 @@ document.body.appendChild(floatWidget);
 
 // 2. The main function to fetch and render
 function fetchAndRenderStock(ticker) {
-    // Show loading state and slide in
+    // Show loading state and slide in (Dark mode text colors)
     floatWidget.innerHTML = `
-        <div style="font-size: 16px; font-weight: bold; color: #202124; margin-bottom: 4px;">
+        <div style="font-size: 16px; font-weight: bold; color: #ffffff; margin-bottom: 4px;">
             ${ticker}
         </div>
-        <div style="font-size: 12px; color: #80868b;">Loading official data...</div>
+        <div style="font-size: 12px; color: #9aa0a6;">Loading official data...</div>
     `;
     floatWidget.style.transform = 'translateX(0)';
     
@@ -44,16 +45,14 @@ function fetchAndRenderStock(ticker) {
         fetch(`https://finnhub.io/api/v1/stock/metric?symbol=${ticker}&metric=all&token=${API_KEY}`).then(res => res.json())
     ])
     .then(([profileData, quoteData, metricData]) => {
-        // 1. Name Data
         const companyName = profileData.name || ticker;
         
-        // 2. Price Data
         const currentPrice = quoteData.c.toFixed(2);
         const percentChange = quoteData.dp.toFixed(2);
+        // Green and Red stay the same, they look great in dark mode
         const priceColor = percentChange >= 0 ? '#00c805' : '#ff5000';
         const sign = percentChange >= 0 ? '+' : '';
 
-        // 3. Risk Data (Beta)
         const beta = metricData?.metric?.beta || 1.0; 
         let riskText = "Moderate Risk";
         let riskColor = "#fbbc04"; 
@@ -69,13 +68,12 @@ function fetchAndRenderStock(ticker) {
             riskFill = "20%";
         }
 
-        // Make the widget clickable
         floatWidget.onclick = () => window.open(`https://finance.yahoo.com/quote/${ticker}`, '_blank');
         floatWidget.style.cursor = 'pointer';
 
-        // Render the final UI
+        // Render the final UI with Dark Mode hex codes
         floatWidget.innerHTML = `
-            <div style="font-size: 16px; font-weight: bold; color: #202124; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${companyName}">
+            <div style="font-size: 16px; font-weight: bold; color: #ffffff; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${companyName}">
                 ${companyName}
             </div>
             
@@ -88,30 +86,29 @@ function fetchAndRenderStock(ticker) {
                 </span>
             </div>
 
-            <div style="margin-bottom: 12px; background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #f1f3f4;">
-                <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 6px; color: #5f6368; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">
+            <div style="margin-bottom: 12px; background: #202124; padding: 10px; border-radius: 8px; border: 1px solid #3c4043;">
+                <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 6px; color: #9aa0a6; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">
                     <span>Volatility Risk</span>
                     <span style="color: ${riskColor};">${riskText}</span>
                 </div>
-                <div style="width: 100%; background: #e8eaed; height: 6px; border-radius: 3px; overflow: hidden;">
+                <div style="width: 100%; background: #3c4043; height: 6px; border-radius: 3px; overflow: hidden;">
                     <div style="width: ${riskFill}; background: ${riskColor}; height: 100%; border-radius: 3px; transition: width 1s ease-in-out;"></div>
                 </div>
             </div>
 
-            <div style="font-size: 11px; color: #80868b; text-transform: uppercase;">
+            <div style="font-size: 11px; color: #9aa0a6; text-transform: uppercase;">
                 ${ticker} Live Market Data
             </div>
         `;
     })
     .catch(error => {
         floatWidget.innerHTML = `
-            <div style="font-size: 16px; font-weight: bold; color: #202124; margin-bottom: 4px;">${ticker}</div>
-            <div style="color: red; font-size: 12px;">Error fetching API data.</div>
+            <div style="font-size: 16px; font-weight: bold; color: #ffffff; margin-bottom: 4px;">${ticker}</div>
+            <div style="color: #ff5000; font-size: 12px;">Error fetching API data.</div>
         `;
         console.error("API Error:", error);
     });
 
-    // Hide after 15 seconds so it doesn't block the chart permanently
     setTimeout(() => { floatWidget.style.transform = 'translateX(120%)'; }, 15000);
 }
 
