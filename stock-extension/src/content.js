@@ -1,10 +1,9 @@
 // src/content.js
 
-// 1. Create the floating container
+// 1. Create the floating container once
 const floatWidget = document.createElement('div');
 floatWidget.id = "my-stock-extension-widget";
 
-// 2. Style it (Added 'cursor: pointer' to show it's clickable)
 Object.assign(floatWidget.style, {
     position: 'fixed',
     bottom: '20px',
@@ -19,82 +18,113 @@ Object.assign(floatWidget.style, {
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     color: '#202124',
     transform: 'translateX(120%)',
-    transition: 'transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-    cursor: 'pointer' // Makes the mouse a pointer finger on hover
+    transition: 'transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
 });
 
-// 3. Inject it into the page
 document.body.appendChild(floatWidget);
 
-// 4. Listen for messages from the background script
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "updateTicker") {
-        const ticker = request.ticker;
+// 2. The main function to fetch and render
+function fetchAndRenderStock(ticker) {
+    // Show loading state and slide in
+    floatWidget.innerHTML = `
+        <div style="font-size: 16px; font-weight: bold; color: #202124; margin-bottom: 4px;">
+            ${ticker}
+        </div>
+        <div style="font-size: 12px; color: #80868b;">Loading official data...</div>
+    `;
+    floatWidget.style.transform = 'translateX(0)';
+    
+    // PUT YOUR API KEY HERE
+    const API_KEY = "d6d8k81r01qgk7ml0g80d6d8k81r01qgk7ml0g8g"; 
+    
+    // Fetch Name, Price, and Risk Metrics simultaneously
+    Promise.all([
+        fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${ticker}&token=${API_KEY}`).then(res => res.json()),
+        fetch(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${API_KEY}`).then(res => res.json()),
+        fetch(`https://finnhub.io/api/v1/stock/metric?symbol=${ticker}&metric=all&token=${API_KEY}`).then(res => res.json())
+    ])
+    .then(([profileData, quoteData, metricData]) => {
+        // 1. Name Data
+        const companyName = profileData.name || ticker;
         
-        // Grab the full company name directly from Robinhood's H1 tag
-        const h1Element = document.querySelector('h1');
-        const companyName = h1Element ? h1Element.innerText : ticker;
-        
-        // Make the widget clickable to open Yahoo Finance
-        floatWidget.onclick = () => {
-            window.open(`https://finance.yahoo.com/quote/${ticker}`, '_blank');
-        };
+        // 2. Price Data
+        const currentPrice = quoteData.c.toFixed(2);
+        const percentChange = quoteData.dp.toFixed(2);
+        const priceColor = percentChange >= 0 ? '#00c805' : '#ff5000';
+        const sign = percentChange >= 0 ? '+' : '';
 
-        // Loading State Layout (Name first)
+        // 3. Risk Data (Beta)
+        const beta = metricData?.metric?.beta || 1.0; 
+        let riskText = "Moderate Risk";
+        let riskColor = "#fbbc04"; 
+        let riskFill = "50%"; 
+
+        if (beta > 1.3) {
+            riskText = "High Risk (Volatile)";
+            riskColor = "#ff5000"; 
+            riskFill = "85%";
+        } else if (beta < 0.8) {
+            riskText = "Low Risk (Stable)";
+            riskColor = "#00c805"; 
+            riskFill = "20%";
+        }
+
+        // Make the widget clickable
+        floatWidget.onclick = () => window.open(`https://finance.yahoo.com/quote/${ticker}`, '_blank');
+        floatWidget.style.cursor = 'pointer';
+
+        // Render the final UI
         floatWidget.innerHTML = `
-            <div style="font-size: 16px; font-weight: bold; color: #202124; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            <div style="font-size: 16px; font-weight: bold; color: #202124; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${companyName}">
                 ${companyName}
             </div>
-            <div style="font-size: 12px; color: #80868b;">Fetching trend...</div>
+            
+            <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px;">
+                <span style="font-size: 24px; font-weight: bold; color: ${priceColor};">
+                    $${currentPrice}
+                </span>
+                <span style="font-size: 14px; font-weight: bold; color: ${priceColor};">
+                    ${sign}${percentChange}%
+                </span>
+            </div>
+
+            <div style="margin-bottom: 12px; background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #f1f3f4;">
+                <div style="display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 6px; color: #5f6368; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px;">
+                    <span>Volatility Risk</span>
+                    <span style="color: ${riskColor};">${riskText}</span>
+                </div>
+                <div style="width: 100%; background: #e8eaed; height: 6px; border-radius: 3px; overflow: hidden;">
+                    <div style="width: ${riskFill}; background: ${riskColor}; height: 100%; border-radius: 3px; transition: width 1s ease-in-out;"></div>
+                </div>
+            </div>
+
+            <div style="font-size: 11px; color: #80868b; text-transform: uppercase;">
+                ${ticker} Live Market Data
+            </div>
         `;
-        floatWidget.style.transform = 'translateX(0)'; 
-        
-        const API_KEY = "d6d8k81r01qgk7ml0g80d6d8k81r01qgk7ml0g8g"; 
-        
-        // Fetch real-time data
-        fetch(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${API_KEY}`)
-            .then(response => response.json())
-            .then(data => {
-                const currentPrice = data.c.toFixed(2);
-                const percentChange = data.dp.toFixed(2);
-                const color = percentChange >= 0 ? '#00c805' : '#ff5000';
-                const sign = percentChange >= 0 ? '+' : '';
+    })
+    .catch(error => {
+        floatWidget.innerHTML = `
+            <div style="font-size: 16px; font-weight: bold; color: #202124; margin-bottom: 4px;">${ticker}</div>
+            <div style="color: red; font-size: 12px;">Error fetching API data.</div>
+        `;
+        console.error("API Error:", error);
+    });
 
-                // Final Layout: Company Name -> Market Trend -> Ticker
-                floatWidget.innerHTML = `
-                    <div style="font-size: 16px; font-weight: bold; color: #202124; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${companyName}">
-                        ${companyName}
-                    </div>
-                    <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px;">
-                        <span style="font-size: 24px; font-weight: bold; color: ${color};">
-                            $${currentPrice}
-                        </span>
-                        <span style="font-size: 14px; font-weight: bold; color: ${color};">
-                            ${sign}${percentChange}%
-                        </span>
-                    </div>
-                    <div style="font-size: 11px; color: #80868b; text-transform: uppercase;">
-                        ${ticker} • Click for details
-                    </div>
-                `;
-            })
-            .catch(error => {
-                floatWidget.innerHTML += `<div style="color: red; font-size: 12px; margin-top: 8px;">Error fetching data.</div>`;
-            });
+    // Hide after 15 seconds so it doesn't block the chart permanently
+    setTimeout(() => { floatWidget.style.transform = 'translateX(120%)'; }, 15000);
+}
 
-        // Hide after 8 seconds
-        setTimeout(() => {
-             floatWidget.style.transform = 'translateX(120%)';
-        }, 8000);
+// 3. Listen for clicks from the background script
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "updateTicker") {
+        fetchAndRenderStock(request.ticker);
     }
 });
 
-// 5. Initial check for direct navigation
+// 4. Check the URL immediately on first page load
 const currentUrl = window.location.href;
 const match = currentUrl.match(/\/stocks\/([A-Z0-9]+)/);
 if (match) {
-    // Slight delay to ensure Robinhood's H1 has loaded before we read it
-    setTimeout(() => {
-        chrome.runtime.onMessage.dispatch({action: "updateTicker", ticker: match[1]});
-    }, 500);
+    fetchAndRenderStock(match[1]);
 }
